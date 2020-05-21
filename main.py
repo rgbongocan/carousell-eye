@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from requests.exceptions import Timeout
 from pprint import PrettyPrinter
-from typing import Any, List
+from typing import Any, Dict, List
 
 import re
 import requests
@@ -37,14 +37,14 @@ LISTING_CURRENCY = "PHP"
 LISTING_SIZE_PREFIX = "Size:"
 
 
-def get_listings(brand: str, dry_run=True) -> List[Any]: 
+def get_listings(brand: str) -> List[Any]: 
     url = CAROUSELL_URL.format(search=brand.replace("20%"," "))
     resp = requests.get(url)
     soup = BeautifulSoup(resp.text, "html.parser")
 
     
     listings = [] 
-    for listing_idx, listing_node in enumerate(soup.find_all("a", href=re.compile(LISTING_REGEXP))):
+    for listing_node in soup.find_all("a", href=re.compile(LISTING_REGEXP)):
         listing = {
             "title": None,
             "link": f"{CAROUSELL_HOST}{listing_node.get('href')}",
@@ -54,7 +54,7 @@ def get_listings(brand: str, dry_run=True) -> List[Any]:
             # and possibly other <p> nodes we might not recognize in the future 
             "description": [] 
         }
-        
+
         for p_idx, p in enumerate(listing_node.find_all("p", recursive=False)):
             if not (listing_info := p.string):
                 continue
@@ -116,7 +116,42 @@ def get_listings(brand: str, dry_run=True) -> List[Any]:
         #             parse_mode=telegram.ParseMode.HTML,
         #         )
 
+TITLE_LIMIT = 30
+DESCRIPTION_LIMIT = 60
+
+def format_message(listing: Dict[str, Any]) -> str:
+    title = t if len(t := listing["title"]) < TITLE_LIMIT else f"{t[:TITLE_LIMIT].strip()}..."
+    description = "\n".join([
+        d if len(d) > DESCRIPTION_LIMIT else f"{d[:DESCRIPTION_LIMIT].strip()}..."
+        for d in listing["description"]
+    ])
+
+    return f"""
+<a href="{listing["link"]}">{title.title()}</a>
+{listing["price"]}
+{listing["size"]}
+<i>{description}</i>"""
+
 
 if __name__ == "__main__":
-    # print("config", config)
-    PrettyPrinter(indent=4).pprint(get_listings("Visvim", dry_run=False))
+    for brand in {"APC", "Comme des Garcons", "Visvim"}:
+        listings = get_listings(brand)
+        for idx, listing in enumerate(listings):
+            if idx > 3:
+                break
+            photo_url = get_listing_photo(listing["link"], listing["title"])
+            message = format_message(listing)
+            print(message, photo_url)
+            if photo_url:
+                BOT.send_photo(
+                    CHANNEL,
+                    photo_url,
+                    caption=message,
+                    parse_mode=telegram.ParseMode.HTML,
+                )
+            else:
+                BOT.send_message(
+                    chat_id=CHANNEL,
+                    text=message, 
+                    parse_mode=telegram.ParseMode.HTML,
+                )
