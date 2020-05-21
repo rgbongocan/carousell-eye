@@ -74,9 +74,11 @@ class CarousellListing:
         if len(description) > self.DESCRIPTION_LIMIT:
             description = f"{description[:self.DESCRIPTION_LIMIT].strip()}..."
 
-        return f"""
-<a href="{self.url}">{title.title()}</a>
-{self.price or "No price indicated"}
-{self.size or "No size indicated"}
-<i>{description}</i>"""
+        message = f"<a href=\"{self.url}\">{title.title()}</a>"
+        if self.price:
+            message += f"\n{self.price}"
+        if self.size:
+            message += f"\n{self.size}"
+        message += f"\n<i>{description}</i>"
+        return message
 
