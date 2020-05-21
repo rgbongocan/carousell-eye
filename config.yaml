@@ -1,0 +1,6 @@
+telegram:
+  channel: "@carouscrapes"
+  bot:
+    token: 1286003358:AAFcB6jTkorWRA74nzUAOaOe9tjCRzd8nHk
+carousell: 
+  host: https://www.carousell.ph
