@@ -10,80 +10,59 @@ import requests
 import telegram
 import yaml
 
-from listing import CarousellListing
-
+from search import CarousellCategories, CarousellSearch, CarousellListing
 
 config = yaml.safe_load(open("config.yaml"))
-CAROUSELL_HOST = config["carousell"]["host"]
-CAROUSELL_URL = f"{CAROUSELL_HOST}/categories/" \
-    "mens-fashion-3?" \
-    "search={search}" \
-    "&sort_by=time_created%2Cdescending"
 BOT = telegram.Bot(config["telegram"]["bot"]["token"])
 CHANNEL = config["telegram"]["channel"]
 
+TITLE_LIMIT = 30
+DESCRIPTION_LIMIT = 60
 
-def get_listings(brand: str) -> List[Any]: 
-    url = CAROUSELL_URL.format(search=brand.replace("20%"," "))
-    resp = requests.get(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
+def generate_message(listing: CarousellListing) -> str:
+    # assume the listing is valid
+    title = t if len((t := listing.title)) < TITLE_LIMIT else f"{t[:TITLE_LIMIT].strip()}..."
+    description = d if len((d := listing.description)) else f"{d[:DESCRIPTION_LIMIT].strip()}..."
+    message = f"<a href=\"{listing.url}\">{title.title()}</a>"
+    message += f"\n{listing.price}"
+    if listing.others:
+        others = "\n".join(listing.others)
+        message += f"\n{others}"
+    message += f"\n<i>{description}</i>"
+    return message
 
-    listings: List[CarousellListing] = [] 
-    for listing_node in soup.find_all("a", href=re.compile("^/p/")):
-        listing = CarousellListing(url=f"{CAROUSELL_HOST}{listing_node.get('href')}")
-        for p_idx, p in enumerate(listing_node.find_all("p", recursive=False)):
-            if not (listing_info := p.string):
-                continue
 
-            key = "description"
-            if p_idx == 0:
-                key = "title"
-            elif listing_info.startswith("PHP "):
-                key = "price"
-            elif listing_info.startswith("Size: "):
-                key = "size"
-            
-            if key == "description":
-                pass
-                listing.description.append(listing_info)
-            else:
-                setattr(listing, key, listing_info)
-        listings.append(listing)
+def run_script():
+    # logging.basicConfig(level = logging.INFO)
+    # search = CarousellSearch("Maison Kitsune").filter(collections=CarousellCategories.ALL_MENS_FASHION)
+    # search = CarousellSearch("Kate Spade sling").filter(collections=CarousellCategories.WOMENS_BAG_AND_WALLETS)
+    for brand in ["Bellroy"]:
+        search = CarousellSearch(brand)
+        listings = search.execute()
+        # print(listings)
+        for idx, listing in enumerate(listings):
+            if idx > 5:
+                break
+            message = generate_message(listing)
+            try:
+                if (url := listing.photo_url):
+                    BOT.send_photo(
+                        CHANNEL,
+                        url,
+                        caption=message,
+                        parse_mode=telegram.ParseMode.HTML,
+                    )
+                else:
+                    BOT.send_message(
+                        chat_id=CHANNEL,
+                        text=message, 
+                        parse_mode=telegram.ParseMode.HTML,
+                    )
+                print(f"Sent message for listing {listing.id}: {listing.title}")
+            except (TimedOut, NetworkError, TelegramError) as e:
+                # TODO: Implement a retry mechanism that doesnt accidentally send dupes
+                print(e)
 
-    return listings        
-    
 
 if __name__ == "__main__":
-    for brand in ("APC", "Commes des Garcons", "Nanamica"):
-        listings = get_listings(brand)
-        for idx, listing in enumerate(listings):
-            # rate-limit for dev purposes
-            if idx > 1:
-                break
-            photo_url = listing.photo_url
-            message = listing.generate_message()
-            # 2 send attempts per listing
-            for _ in range(2):
-                try:
-                    if photo_url:
-                        BOT.send_photo(
-                            CHANNEL,
-                            photo_url,
-                            caption=message,
-                            parse_mode=telegram.ParseMode.HTML,
-                        )
-                        break
-                    else:
-                        BOT.send_message(
-                            chat_id=CHANNEL,
-                            text=message, 
-                            parse_mode=telegram.ParseMode.HTML,
-                        )
-                        break
-                except (TimedOut, NetworkError):
-                    # retry until we've successfully imgs or we run out of attempts   
-                    pass
-                except TelegramError as e:
-                    # log the breaking error and move on to the next listing
-                    logging.error(e)
-                    break
+    run_script()

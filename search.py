@@ -13,17 +13,10 @@ CAROUSELL_API = "api-service/filter/search/3.3/products/"
 
 class CarousellCategories(Enum):
    ALL_MENS_FASHION = "3"
+   WOMENS_BAG_AND_WALLETS = "844"
 
 
 class CarousellListing:
-    TITLE_LIMIT = 30
-    DESCRIPTION_LIMIT = 60
-    
-    @property
-    def url(self):
-        return f"{CAROUSELL_HOST}/p/{self.id}" 
-
-
     def __init__(
         self,
         id=None,
@@ -38,23 +31,13 @@ class CarousellListing:
         self.title = title
         self.price = price
         self.description = description
-        self.others = others,
+        self.others = others
         self.photo_url = photo_url
 
-
-    # should be outside
-    def generate_message(self) -> str:
-        self.validate()
-        title = t if len((t := self.title)) < self.TITLE_LIMIT else f"{t[:self.TITLE_LIMIT].strip()}..."
-        description = "\n".join(self.description)
-        if len(description) > self.DESCRIPTION_LIMIT:
-            description = f"{description[:self.DESCRIPTION_LIMIT].strip()}..."
-
-        message = f"<a href=\"{self.url}\">{title.title()}</a>"
-        if self.price:
-            message += f"\n{self.price}"
-        message += f"\n<i>{description}</i>"
-        return message
+    
+    @property
+    def url(self):
+        return f"{CAROUSELL_HOST}/p/{self.id}" 
 
 
     def json(self):
@@ -90,7 +73,7 @@ class CarousellSearch:
         for k, v in kwargs.items():
             if k not in new_filters:
                 new_filters[k] = []
-            new_filters[k].append(v)
+            new_filters[k].append(v.value if isinstance(v, Enum) else v)
         return self._copy_with(
             term=self.term,
             count=self.count,
@@ -148,7 +131,7 @@ class CarousellSearch:
         # turn into a generator instead?
         listings: List[CarousellListing] = []
         resp = requests.post(f"{CAROUSELL_HOST}/{CAROUSELL_API}", json=self.json())
-        results = resp.json()["data"]["results"]
+        results = resp.json()["data"].get("results", [])
         for lc in [r["listingCard"] for r in results]:
             kwargs = {
                 "id": lc["id"],
