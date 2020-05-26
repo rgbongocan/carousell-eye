@@ -4,6 +4,10 @@ telegram:
     token: 1286003358:AAFcB6jTkorWRA74nzUAOaOe9tjCRzd8nHk
 carousell: 
   host: https://www.carousell.ph
+message:
+  limit:
+    title: 30
+    description: 60 
 listing:
   recency: 3
   ttl: 3

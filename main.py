@@ -22,8 +22,8 @@ BRANDS = config["listing"]["brands"]
 RECENCY = config["listing"]["recency"]  # maximum age (in days) of listing allowed
 TTL = 60 * 60 * 24 * config["listing"]["ttl"]  # expiry (in days) of listing redis entry (interpreted as "message already sent")
 
-TITLE_LIMIT = 30
-DESCRIPTION_LIMIT = 60
+TITLE_LIMIT = config["message"]["limit"]["title"]
+DESCRIPTION_LIMIT = config["message"]["limit"]["title"]
 
 cache = redis.Redis(host='redis', port=6379)
 
