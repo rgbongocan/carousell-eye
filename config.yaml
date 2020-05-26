@@ -4,3 +4,33 @@ telegram:
     token: 1286003358:AAFcB6jTkorWRA74nzUAOaOe9tjCRzd8nHk
 carousell: 
   host: https://www.carousell.ph
+brands:
+  - ACG
+  - Aer
+  - APC
+  - Acne Studios
+  - Beams Boy
+  - Bellroy
+  - Carthartt
+  - Cav Empt
+  - Capital
+  - Comme des Garcons
+  - Common Projects
+  - Engineered Garments
+  - Hare
+  - Helmut Lang
+  - Human Made
+  - Junya Watanabe
+  - Maharishi
+  - Maison Kitsune
+  - Maison Margiela
+  - Nanamica
+  - Needles
+  - Our Legacy
+  - Porter
+  - RRL
+  - Saint Laurent Paris
+  - Stone Island
+  - Undercover
+  - Visvim
+  - WTAPS

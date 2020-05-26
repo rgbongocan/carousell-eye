@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 import logging
 import re
+import redis
 import requests
 import telegram
 import yaml
@@ -15,9 +16,14 @@ from search import CarousellCategories, CarousellSearch, CarousellListing
 config = yaml.safe_load(open("config.yaml"))
 BOT = telegram.Bot(config["telegram"]["bot"]["token"])
 CHANNEL = config["telegram"]["channel"]
+BRANDS = config["brands"]
 
 TITLE_LIMIT = 30
 DESCRIPTION_LIMIT = 60
+
+cache = redis.Redis(host='redis', port=6379)
+EXPIRY = 60 * 60 * 24 * 7 # a week in seconds
+
 
 def generate_message(listing: CarousellListing) -> str:
     # assume the listing is valid
@@ -33,32 +39,35 @@ def generate_message(listing: CarousellListing) -> str:
 
 
 def run_script():
-    # logging.basicConfig(level = logging.INFO)
-    # search = CarousellSearch("Maison Kitsune").filter(collections=CarousellCategories.ALL_MENS_FASHION)
-    # search = CarousellSearch("Kate Spade sling").filter(collections=CarousellCategories.WOMENS_BAG_AND_WALLETS)
-    for brand in ["Bellroy"]:
-        search = CarousellSearch(brand)
+    # TODO: proper logging
+    for brand in BRANDS:
+        search = CarousellSearch(brand).filter(collections=CarousellCategories.ALL_MENS_FASHION)
         listings = search.execute()
-        # print(listings)
         for idx, listing in enumerate(listings):
-            if idx > 5:
+            if idx > 2:
                 break
+            if cache.exists(listing.id):
+                print(f"Already sent: {listing.id} - {listing.title}")
+                continue
             message = generate_message(listing)
             try:
+                tg_message = None
                 if (url := listing.photo_url):
-                    BOT.send_photo(
+                    tg_message: telegram.Message = BOT.send_photo(
                         CHANNEL,
                         url,
                         caption=message,
                         parse_mode=telegram.ParseMode.HTML,
                     )
                 else:
-                    BOT.send_message(
+                    tg_message: telegram.Message = BOT.send_message(
                         chat_id=CHANNEL,
                         text=message, 
                         parse_mode=telegram.ParseMode.HTML,
                     )
-                print(f"Sent message for listing {listing.id}: {listing.title}")
+                if tg_message:
+                    print(f"Successfully sent: {listing.id} - {listing.title}")
+                    cache.setex(listing.id, EXPIRY, "")
             except (TimedOut, NetworkError, TelegramError) as e:
                 # TODO: Implement a retry mechanism that doesnt accidentally send dupes
                 print(e)
