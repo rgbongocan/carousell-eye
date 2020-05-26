@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from enum import Enum
 from pprint import PrettyPrinter
+from time import time
+from typing import Any, Dict, List
 
 import copy
 import requests
@@ -20,6 +23,7 @@ class CarousellListing:
     def __init__(
         self,
         id=None,
+        created_at=None,
         title=None,
         url=None,
         price=None,
@@ -28,6 +32,7 @@ class CarousellListing:
         photo_url=None
     ) -> None:
         self.id = id
+        self.created_at = created_at
         self.title = title
         self.price = price
         self.description = description
@@ -36,13 +41,14 @@ class CarousellListing:
 
     
     @property
-    def url(self):
+    def url(self) -> str:
         return f"{CAROUSELL_HOST}/p/{self.id}" 
 
 
-    def json(self):
+    def json(self) -> Dict[str, Any]:
         return {
             "id": self.id,
+            "created_at": self.created_at,
             "title": self.title,
             "price": self.price,
             "description": self.description,
@@ -52,8 +58,19 @@ class CarousellListing:
         }
 
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.json())
+
+    
+    @staticmethod
+    def filter_recent(listings: List[CarousellListing], age_lte: timedelta) -> List[CarousellListing]:
+        """
+        Filter listings in-python with max age allowed specified by timedelta
+        """
+        return [
+            l for l in listings if (datetime.now() - l.created_at <= age_lte) 
+        ]
+        
 
 
 class CarousellSearch:
@@ -123,7 +140,7 @@ class CarousellSearch:
         return params
 
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.json())
 
 
@@ -133,9 +150,12 @@ class CarousellSearch:
         resp = requests.post(f"{CAROUSELL_HOST}/{CAROUSELL_API}", json=self.json())
         results = resp.json()["data"].get("results", [])
         for lc in [r["listingCard"] for r in results]:
+            ts_component = next((c for c in lc["aboveFold"] if c["component"] == "time_created"), {})
+            ts = ts_component.get("timestampContent", {}).get("seconds", {}).get("low", int(time()))
             kwargs = {
                 "id": lc["id"],
-                "others": []
+                "created_at": datetime.fromtimestamp(ts),
+                "others": [],
             }
             for component in lc["belowFold"]:
                 if (name := component["component"]) == "header_1":

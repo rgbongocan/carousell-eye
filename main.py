@@ -1,10 +1,12 @@
 from bs4 import BeautifulSoup
+from datetime import timedelta
 from requests.exceptions import RequestException, Timeout
 from pprint import PrettyPrinter
 from telegram.error import TelegramError, TimedOut, NetworkError
 from typing import Any, Dict, List
 
 import logging
+import random
 import re
 import redis
 import requests
@@ -16,13 +18,14 @@ from search import CarousellCategories, CarousellSearch, CarousellListing
 config = yaml.safe_load(open("config.yaml"))
 BOT = telegram.Bot(config["telegram"]["bot"]["token"])
 CHANNEL = config["telegram"]["channel"]
-BRANDS = config["brands"]
+BRANDS = config["listing"]["brands"]
+RECENCY = config["listing"]["recency"]  # maximum age (in days) of listing allowed
+TTL = 60 * 60 * 24 * config["listing"]["ttl"]  # expiry (in days) of listing redis entry (interpreted as "message already sent")
 
 TITLE_LIMIT = 30
 DESCRIPTION_LIMIT = 60
 
 cache = redis.Redis(host='redis', port=6379)
-EXPIRY = 60 * 60 * 24 * 7 # a week in seconds
 
 
 def generate_message(listing: CarousellListing) -> str:
@@ -38,16 +41,20 @@ def generate_message(listing: CarousellListing) -> str:
     return message
 
 
-def run_script():
+def run_script(dry_run=True):
     # TODO: proper logging
-    for brand in BRANDS:
+    for brand in random.sample(BRANDS, 3):
         search = CarousellSearch(brand).filter(collections=CarousellCategories.ALL_MENS_FASHION)
-        listings = search.execute()
-        for idx, listing in enumerate(listings):
-            if idx > 2:
-                break
+        listings: List[CarousellListing] = search.execute()
+        unfiltered_len = len(listings)
+        listings = CarousellListing.filter_recent(listings, timedelta(days=RECENCY))
+        print(f"Got {unfiltered_len} listings under {brand}; {len(listings)} are recent")
+        for listing in listings:
             if cache.exists(listing.id):
                 print(f"Already sent: {listing.id} - {listing.title}")
+                continue
+            if dry_run:
+                print(f"Will send {listing.id} - {listing.title}")
                 continue
             message = generate_message(listing)
             try:
@@ -67,11 +74,11 @@ def run_script():
                     )
                 if tg_message:
                     print(f"Successfully sent: {listing.id} - {listing.title}")
-                    cache.setex(listing.id, EXPIRY, "")
+                    cache.setex(listing.id, TTL, "")
             except (TimedOut, NetworkError, TelegramError) as e:
                 # TODO: Implement a retry mechanism that doesnt accidentally send dupes
                 print(e)
 
 
 if __name__ == "__main__":
-    run_script()
+    run_script(dry_run=False)
